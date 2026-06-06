@@ -5,6 +5,7 @@ from sqlalchemy import Enum as SqlEnum
 from sqlalchemy import ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from src.apps.user.models import User
 from src.db.base import Base
 
 
