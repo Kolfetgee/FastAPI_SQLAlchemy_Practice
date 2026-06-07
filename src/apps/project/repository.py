@@ -80,7 +80,7 @@ class ProjectRepository:
 
         self.session.add(project)
         await self.session.commit()
-        await self.session.refresh(project)git status --short
+        await self.session.refresh(project)
 
         return project
 
