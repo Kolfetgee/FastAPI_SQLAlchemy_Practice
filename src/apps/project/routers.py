@@ -1,8 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.apps.project.models import ProjectStatus
 from src.apps.project.repository import ProjectRepository
-from src.apps.project.schemas import ProjectCreate, ProjectRead, ProjectUpdate
+from src.apps.project.schemas import (
+    ProjectCreate,
+    ProjectListResponse,
+    ProjectRead,
+    ProjectUpdate,
+)
 from src.apps.project.services import ProjectService
 from src.db.session import get_db
 
@@ -15,11 +21,36 @@ def get_project_service(db: AsyncSession = Depends(get_db)) -> ProjectService:
     return ProjectService(repository=repository)
 
 
-@project_router.get("/", response_model=list[ProjectRead])
+@project_router.get("/", response_model=ProjectListResponse)
 async def get_projects(
+    limit: int = Query(default=10, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    status: ProjectStatus | None = None,
+    person_in_charge_id: int | None = Query(default=None, ge=1),
+    sort_by: str = Query(default="id"),
     service: ProjectService = Depends(get_project_service),
 ):
-    return await service.get_projects()
+    allowed_sort_fields = {"id", "create_time", "start_time", "complete_time"}
+
+    if sort_by not in allowed_sort_fields:
+        raise HTTPException(status_code=400, detail="Invalid sort_by field")
+
+    projects, total_count = await service.get_projects(
+        limit=limit,
+        offset=offset,
+        status=status,
+        person_in_charge_id=person_in_charge_id,
+        sort_by=sort_by,
+    )
+
+    return ProjectListResponse(
+        items=projects,
+        total_count=total_count,
+        limit=limit,
+        offset=offset,
+        has_prev=offset > 0,
+        has_next=offset + limit < total_count,
+    )
 
 
 @project_router.get("/{project_id}", response_model=ProjectRead)

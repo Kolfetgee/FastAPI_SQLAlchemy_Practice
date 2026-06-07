@@ -1,7 +1,7 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.apps.project.models import Project
+from src.apps.project.models import Project, ProjectStatus
 from src.apps.project.schemas import ProjectCreate, ProjectUpdate
 
 
@@ -28,7 +28,14 @@ class ProjectRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_all(self) -> list[Project]:
+    async def get_all(
+        self,
+        limit: int,
+        offset: int,
+        status: ProjectStatus | None = None,
+        person_in_charge_id: int | None = None,
+        sort_by: str = "id",
+    ) -> tuple[list[Project], int]:
         """
         SQL:
         SELECT
@@ -41,11 +48,47 @@ class ProjectRepository:
             complete_time,
             person_in_charge_id
         FROM projects
-        ORDER BY id;
+        WHERE
+            (:status IS NULL OR status = :status)
+            AND (:person_in_charge_id IS NULL OR person_in_charge_id = :person_in_charge_id)
+        ORDER BY :sort_by
+        LIMIT :limit
+        OFFSET :offset;
+
+        SELECT COUNT(*)
+        FROM projects
+        WHERE
+            (:status IS NULL OR status = :status)
+            AND (:person_in_charge_id IS NULL OR person_in_charge_id = :person_in_charge_id);
         """
-        stmt = select(Project).order_by(Project.id)
+        stmt = select(Project)
+        count_stmt = select(func.count()).select_from(Project)
+
+        if status is not None:
+            stmt = stmt.where(Project.status == status)
+            count_stmt = count_stmt.where(Project.status == status)
+
+        if person_in_charge_id is not None:
+            stmt = stmt.where(Project.person_in_charge_id == person_in_charge_id)
+            count_stmt = count_stmt.where(Project.person_in_charge_id == person_in_charge_id)
+
+        sort_columns = {
+            "id": Project.id,
+            "create_time": Project.create_time,
+            "start_time": Project.start_time,
+            "complete_time": Project.complete_time,
+        }
+        sort_column = sort_columns.get(sort_by, Project.id)
+
+        stmt = stmt.order_by(sort_column).limit(limit).offset(offset)
+
         result = await self.session.execute(stmt)
-        return list(result.scalars().all())
+        projects = list(result.scalars().all())
+
+        count_result = await self.session.execute(count_stmt)
+        total_count = count_result.scalar_one()
+
+        return projects, total_count
 
     async def create(self, project_in: ProjectCreate) -> Project:
         """

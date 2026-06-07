@@ -1,4 +1,4 @@
-from src.apps.project.models import Project
+from src.apps.project.models import Project, ProjectStatus
 from src.apps.project.repository import ProjectRepository
 from src.apps.project.schemas import ProjectCreate, ProjectUpdate
 
@@ -10,8 +10,21 @@ class ProjectService:
     async def get_project(self, project_id: int) -> Project | None:
         return await self.repository.get_by_id(project_id)
 
-    async def get_projects(self) -> list[Project]:
-        return await self.repository.get_all()
+    async def get_projects(
+        self,
+        limit: int,
+        offset: int,
+        status: ProjectStatus | None = None,
+        person_in_charge_id: int | None = None,
+        sort_by: str = "id",
+    ) -> tuple[list[Project], int]:
+        return await self.repository.get_all(
+            limit=limit,
+            offset=offset,
+            status=status,
+            person_in_charge_id=person_in_charge_id,
+            sort_by=sort_by,
+        )
 
     async def create_project(self, project_in: ProjectCreate) -> Project:
         return await self.repository.create(project_in)

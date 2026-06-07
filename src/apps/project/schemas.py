@@ -32,3 +32,12 @@ class ProjectUpdate(BaseModel):
     start_time: datetime | None = None
     complete_time: datetime | None = None
     person_in_charge_id: int | None = None
+
+
+class ProjectListResponse(BaseModel):
+    items: list[ProjectRead]
+    total_count: int
+    limit: int
+    offset: int
+    has_prev: bool
+    has_next: bool
