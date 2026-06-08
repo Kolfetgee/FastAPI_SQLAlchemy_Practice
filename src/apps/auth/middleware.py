@@ -1,8 +1,10 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from src.apps.auth.connector import user_auth_connector
 from src.apps.auth.utils import decode_token
+from src.apps.user.repository import UserRepository
+from src.apps.user.services import UserService
+from src.db.session import async_session
 
 
 PROTECTED_PATHS = {
@@ -51,7 +53,11 @@ async def auth_middleware(request: Request, call_next):
             content={"detail": "Invalid token payload"},
         )
 
-    auth_user = user_auth_connector.get_auth_user_by_email(email)
+    async with async_session() as session:
+        repository = UserRepository(session=session)
+        user_service = UserService(repository=repository)
+        auth_user = await user_service.get_auth_user_by_email(email)
+
     if auth_user is None:
         return JSONResponse(
             status_code=401,

@@ -1,24 +1,33 @@
-from src.apps.auth.connector import user_auth_connector
 from src.apps.auth.schemas import LoginRequest, RegisterRequest, TokenResponse
 from src.apps.auth.utils import (
     create_access_token,
     create_refresh_token,
     decode_token,
 )
-from src.apps.user.schemas import UserRead
+from src.apps.user.schemas import UserCreate, UserRead
+from src.apps.user.services import UserService
 
 
 class AuthService:
-    def register_user(self, register_data: RegisterRequest) -> UserRead | None:
-        existing_user = user_auth_connector.get_auth_user_by_email(register_data.email)
+    def __init__(self, user_service: UserService) -> None:
+        self.user_service = user_service
+
+    async def register_user(self, register_data: RegisterRequest) -> UserRead | None:
+        existing_user = await self.user_service.get_auth_user_by_email(register_data.email)
 
         if existing_user is not None:
             return None
 
-        return user_auth_connector.create_user(register_data)
+        user_create = UserCreate(
+            username=register_data.username,
+            email=register_data.email,
+            password=register_data.password,
+        )
 
-    def login_user(self, login_data: LoginRequest) -> TokenResponse | None:
-        auth_user = user_auth_connector.get_auth_user_by_email(login_data.email)
+        return await self.user_service.create_user(user_create)
+
+    async def login_user(self, login_data: LoginRequest) -> TokenResponse | None:
+        auth_user = await self.user_service.get_auth_user_by_email(login_data.email)
 
         if auth_user is None:
             return None
@@ -35,7 +44,7 @@ class AuthService:
             token_type="bearer",
         )
 
-    def refresh_access_token(self, refresh_token: str) -> TokenResponse | None:
+    async def refresh_access_token(self, refresh_token: str) -> TokenResponse | None:
         payload = decode_token(refresh_token)
 
         if payload is None:
@@ -48,7 +57,7 @@ class AuthService:
         if email is None:
             return None
 
-        auth_user = user_auth_connector.get_auth_user_by_email(email)
+        auth_user = await self.user_service.get_auth_user_by_email(email)
         if auth_user is None:
             return None
 
@@ -60,6 +69,3 @@ class AuthService:
             refresh_token=new_refresh_token,
             token_type="bearer",
         )
-
-
-auth_service = AuthService()
