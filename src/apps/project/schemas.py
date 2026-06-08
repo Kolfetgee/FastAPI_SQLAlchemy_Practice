@@ -11,6 +11,8 @@ class ProjectBase(BaseModel):
     status: ProjectStatus = ProjectStatus.NEW
     person_in_charge_id: int
 
+    model_config = ConfigDict(extra="forbid")
+
 
 class ProjectCreate(ProjectBase):
     pass
@@ -32,6 +34,8 @@ class ProjectUpdate(BaseModel):
     start_time: datetime | None = None
     complete_time: datetime | None = None
     person_in_charge_id: int | None = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class ProjectListResponse(BaseModel):

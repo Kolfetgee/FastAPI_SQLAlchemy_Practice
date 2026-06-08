@@ -121,11 +121,53 @@ class ProjectRepository:
         """
         project = Project(**project_in.model_dump())
 
-        self.session.add(project)
-        await self.session.commit()
-        await self.session.refresh(project)
+        try:
+            self.session.add(project)
+            await self.session.commit()
+            await self.session.refresh(project)
+        except Exception:
+            await self.session.rollback()
+            raise
 
         return project
+
+    async def create_many(self, projects_in: list[ProjectCreate]) -> list[Project]:
+        """
+        SQL:
+        INSERT INTO projects (
+            name,
+            description,
+            status,
+            start_time,
+            complete_time,
+            person_in_charge_id
+        )
+        VALUES
+            (:name, :description, :status, :start_time, :complete_time, :person_in_charge_id),
+            ...
+        RETURNING
+            id,
+            name,
+            description,
+            status,
+            create_time,
+            start_time,
+            complete_time,
+            person_in_charge_id;
+        """
+        projects = [Project(**project_in.model_dump()) for project_in in projects_in]
+
+        try:
+            self.session.add_all(projects)
+            await self.session.commit()
+
+            for project in projects:
+                await self.session.refresh(project)
+        except Exception:
+            await self.session.rollback()
+            raise
+
+        return projects
 
     async def update(
         self,
@@ -166,8 +208,12 @@ class ProjectRepository:
         for field_name, field_value in update_data.items():
             setattr(project, field_name, field_value)
 
-        await self.session.commit()
-        await self.session.refresh(project)
+        try:
+            await self.session.commit()
+            await self.session.refresh(project)
+        except Exception:
+            await self.session.rollback()
+            raise
 
         return project
 
@@ -191,7 +237,11 @@ class ProjectRepository:
         if project is None:
             return None
 
-        await self.session.delete(project)
-        await self.session.commit()
+        try:
+            await self.session.delete(project)
+            await self.session.commit()
+        except Exception:
+            await self.session.rollback()
+            raise
 
         return project

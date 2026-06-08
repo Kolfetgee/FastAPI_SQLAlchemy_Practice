@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.apps.project.models import ProjectStatus
@@ -19,6 +20,27 @@ project_router = APIRouter(prefix="/projects", tags=["Projects"])
 def get_project_service(db: AsyncSession = Depends(get_db)) -> ProjectService:
     repository = ProjectRepository(session=db)
     return ProjectService(repository=repository)
+
+
+def raise_integrity_error(error: IntegrityError) -> None:
+    error_message = str(error.orig).lower()
+
+    if "duplicate key" in error_message or "unique constraint" in error_message:
+        raise HTTPException(
+            status_code=409,
+            detail="Project with this name already exists",
+        ) from error
+
+    if "foreign key" in error_message or "violates foreign key constraint" in error_message:
+        raise HTTPException(
+            status_code=400,
+            detail="Person in charge not found",
+        ) from error
+
+    raise HTTPException(
+        status_code=400,
+        detail="Database integrity error",
+    ) from error
 
 
 @project_router.get("/", response_model=ProjectListResponse)
@@ -71,7 +93,21 @@ async def create_project(
     project_in: ProjectCreate,
     service: ProjectService = Depends(get_project_service),
 ):
-    return await service.create_project(project_in)
+    try:
+        return await service.create_project(project_in)
+    except IntegrityError as error:
+        raise_integrity_error(error)
+
+
+@project_router.post("/many", response_model=list[ProjectRead])
+async def create_many_projects(
+    projects_in: list[ProjectCreate],
+    service: ProjectService = Depends(get_project_service),
+):
+    try:
+        return await service.create_many_projects(projects_in)
+    except IntegrityError as error:
+        raise_integrity_error(error)
 
 
 @project_router.patch("/{project_id}", response_model=ProjectRead)
@@ -80,7 +116,10 @@ async def update_project(
     project_update: ProjectUpdate,
     service: ProjectService = Depends(get_project_service),
 ):
-    project = await service.update_project(project_id, project_update)
+    try:
+        project = await service.update_project(project_id, project_update)
+    except IntegrityError as error:
+        raise_integrity_error(error)
 
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")

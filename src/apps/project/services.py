@@ -29,6 +29,9 @@ class ProjectService:
     async def create_project(self, project_in: ProjectCreate) -> Project:
         return await self.repository.create(project_in)
 
+    async def create_many_projects(self, projects_in: list[ProjectCreate]) -> list[Project]:
+        return await self.repository.create_many(projects_in)
+
     async def update_project(
         self,
         project_id: int,
