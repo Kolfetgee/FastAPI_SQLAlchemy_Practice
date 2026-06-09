@@ -89,13 +89,15 @@ class UserRepository:
 
     async def update(self, user_id: int, user_update: UserUpdate) -> UserRead | None:
         """
-        SQL:
-        UPDATE users
-        SET username = :username,
-            email = :email,
-            password = :password
-        WHERE id = :user_id
-        RETURNING id, username, email;
+        SQL-поток:
+        1. Сначала ищем пользователя по id.
+
+        SELECT id, username, email, password
+        FROM users
+        WHERE id = :user_id;
+
+        2. Если пользователь найден, меняем нужные поля ORM-объекта в Python.
+        3. При commit() SQLAlchemy отправляет UPDATE в базу.
         """
         stmt = select(User).where(User.id == user_id)
         result = await self.session.execute(stmt)
@@ -120,10 +122,18 @@ class UserRepository:
 
     async def delete(self, user_id: int) -> UserRead | None:
         """
-        SQL:
+        SQL-поток:
+        1. Сначала ищем пользователя по id.
+
+        SELECT id, username, email, password
+        FROM users
+        WHERE id = :user_id;
+
+        2. Если пользователь найден, удаляем его через ORM.
+        3. При commit() SQLAlchemy отправляет DELETE в базу.
+
         DELETE FROM users
-        WHERE id = :user_id
-        RETURNING id, username, email;
+        WHERE id = :user_id;
         """
         stmt = select(User).where(User.id == user_id)
         result = await self.session.execute(stmt)
