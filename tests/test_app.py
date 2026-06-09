@@ -350,3 +350,169 @@ def test_middleware_rejects_invalid_authorization_header(client: TestClient) -> 
     )
     assert response.status_code == 401
     assert response.json() == {"detail": "Invalid authorization header"}
+
+
+def create_project_owner(client: TestClient) -> int:
+    response = client.post(
+        "/users/",
+        json={
+            "username": "owner1",
+            "email": "owner1@example.com",
+            "password": "123456",
+        },
+    )
+    assert response.status_code == 200
+    return response.json()["id"]
+
+
+def create_project(
+    client: TestClient,
+    owner_id: int,
+    name: str = "Project One",
+    status: str = "new",
+):
+    return client.post(
+        "/projects/",
+        json={
+            "name": name,
+            "description": f"{name} description",
+            "status": status,
+            "person_in_charge_id": owner_id,
+        },
+    )
+
+
+def test_project_crud_flow(client: TestClient) -> None:
+    owner_id = create_project_owner(client)
+
+    response = create_project(client, owner_id)
+    assert response.status_code == 200
+    created_project = response.json()
+
+    assert created_project["name"] == "Project One"
+    assert created_project["status"] == "new"
+    assert created_project["person_in_charge_id"] == owner_id
+    assert "id" in created_project
+    assert "create_time" in created_project
+
+    project_id = created_project["id"]
+
+    response = client.get(f"/projects/{project_id}")
+    assert response.status_code == 200
+    assert response.json()["id"] == project_id
+
+    response = client.patch(
+        f"/projects/{project_id}",
+        json={
+            "name": "Updated Project",
+            "status": "completed",
+        },
+    )
+    assert response.status_code == 200
+    updated_project = response.json()
+    assert updated_project["name"] == "Updated Project"
+    assert updated_project["status"] == "completed"
+
+    response = client.delete(f"/projects/{project_id}")
+    assert response.status_code == 200
+    assert response.json()["id"] == project_id
+
+    response = client.get(f"/projects/{project_id}")
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Project not found"}
+
+
+def test_project_list_pagination_filtering_and_sorting(client: TestClient) -> None:
+    owner_id = create_project_owner(client)
+
+    response = client.post(
+        "/projects/many",
+        json=[
+            {
+                "name": "Project A",
+                "description": "A",
+                "status": "new",
+                "person_in_charge_id": owner_id,
+            },
+            {
+                "name": "Project B",
+                "description": "B",
+                "status": "in_progress",
+                "person_in_charge_id": owner_id,
+            },
+            {
+                "name": "Project C",
+                "description": "C",
+                "status": "new",
+                "person_in_charge_id": owner_id,
+            },
+        ],
+    )
+    assert response.status_code == 200
+    assert len(response.json()) == 3
+
+    response = client.get("/projects/", params={"limit": 2, "offset": 0})
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 2
+    assert data["total_count"] == 3
+    assert data["limit"] == 2
+    assert data["offset"] == 0
+    assert data["has_prev"] is False
+    assert data["has_next"] is True
+
+    response = client.get("/projects/", params={"status": "new"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_count"] == 2
+    assert {project["status"] for project in data["items"]} == {"new"}
+
+    response = client.get(
+        "/projects/",
+        params={"person_in_charge_id": owner_id},
+    )
+    assert response.status_code == 200
+    assert response.json()["total_count"] == 3
+
+    response = client.get(
+        "/projects/",
+        params={"sort_by": "create_time"},
+    )
+    assert response.status_code == 200
+
+    response = client.get(
+        "/projects/",
+        params={"sort_by": "wrong_field"},
+    )
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Invalid sort_by field"}
+
+
+def test_project_errors_and_validation(client: TestClient) -> None:
+    owner_id = create_project_owner(client)
+
+    response = create_project(client, owner_id, name="Unique Project")
+    assert response.status_code == 200
+    project_id = response.json()["id"]
+
+    response = create_project(client, owner_id, name="Unique Project")
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Project with this name already exists"}
+
+    response = create_project(client, 999, name="Wrong Owner Project")
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Person in charge not found"}
+
+    response = client.patch("/projects/999", json={"name": "Missing Project"})
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Project not found"}
+
+    response = client.delete("/projects/999")
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Project not found"}
+
+    response = client.patch(
+        f"/projects/{project_id}",
+        json={"create_time": "2026-01-01T00:00:00"},
+    )
+    assert response.status_code == 422
