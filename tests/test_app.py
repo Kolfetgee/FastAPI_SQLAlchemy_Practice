@@ -2,19 +2,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.utils.store import store
 
-
-@pytest.fixture(autouse=True)
-def clear_store() -> None:
-    store.users.clear()
-    yield
-    store.users.clear()
 
 
 @pytest.fixture
-def client() -> TestClient:
-    return TestClient(app)
+def client():
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 def auth_headers(token: str) -> dict[str, str]:
