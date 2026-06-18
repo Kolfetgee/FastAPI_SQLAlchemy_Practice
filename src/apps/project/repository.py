@@ -175,23 +175,16 @@ class ProjectRepository:
         project_update: ProjectUpdate,
     ) -> Project | None:
         """
-        SQL-поток:
-        1. Сначала ищем проект по id.
-
-        SELECT
-            id,
-            name,
-            description,
-            status,
-            create_time,
-            start_time,
-            complete_time,
-            person_in_charge_id
-        FROM projects
+        SQL:
+        UPDATE projects
+        SET
+            name = :name,
+            description = :description,
+            status = :status,
+            start_time = :start_time,
+            complete_time = :complete_time,
+            person_in_charge_id = :person_in_charge_id
         WHERE id = :project_id;
-
-        2. Если проект найден, меняем нужные поля ORM-объекта в Python.
-        3. При commit() SQLAlchemy отправляет UPDATE в базу.
         """
         project = await self.get_by_id(project_id)
 
@@ -214,24 +207,7 @@ class ProjectRepository:
 
     async def delete(self, project_id: int) -> Project | None:
         """
-        SQL-поток:
-        1. Сначала ищем проект по id.
-
-        SELECT
-            id,
-            name,
-            description,
-            status,
-            create_time,
-            start_time,
-            complete_time,
-            person_in_charge_id
-        FROM projects
-        WHERE id = :project_id;
-
-        2. Если проект найден, удаляем его через ORM.
-        3. При commit() SQLAlchemy отправляет DELETE в базу.
-
+        SQL:
         DELETE FROM projects
         WHERE id = :project_id;
         """
