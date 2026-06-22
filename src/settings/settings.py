@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     db_user: str = "user"
     db_password: str = "password"
     db_name: str = "store_db"
+    test_db_name: str = "store_test_db"
+
+    testing: bool = False
 
     secret_key: str = "super_secret_key"
     algorithm: str = "HS256"
@@ -18,6 +21,8 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
+        db_name = self.test_db_name if self.testing else self.db_name
+
         return (
             f"postgresql+asyncpg://{self.db_user}:{self.db_password}"
             f"@{self.db_host}:{self.db_port}/{self.db_name}"
