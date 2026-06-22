@@ -20,6 +20,9 @@
 - Пагинация проектов.
 - Фильтрация проектов по статусу и ответственному пользователю.
 - Сортировка проектов.
+- Внешний async-сервис для получения posts с jsonplaceholder.
+- Отдельная тестовая база данных.
+- Pytest-тесты для database, services и controllers слоёв.
 - Обработка базовых ошибок:
   - duplicate key;
   - foreign key;
@@ -76,6 +79,10 @@ alembic/
 tests/
   conftest.py
   test_app.py
+  test_external_posts_service.py 
+  test_project_repository.py 
+  test_project_service.py 
+  test_user_repository.py
 ```
 
 ## Переменные окружения
@@ -96,6 +103,15 @@ JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_MINUTES=10080
 ```
+`DB_NAME` используется для основной базы данных.
+
+`TEST_DB_NAME` используется для тестовой базы данных.
+
+Во время запуска тестов `tests/conftest.py` выставляет:
+
+os.environ`["TESTING"]` = "true"
+
+Поэтому тесты работают с отдельной тестовой БД, а не с основной.
 
 ## Установка зависимостей
 
@@ -115,6 +131,10 @@ uv run alembic upgrade head
 uv run alembic current
 ```
 
+Для тестовой базы данных:
+```
+TESTING=true uv run alembic upgrade head
+````
 ## Запуск приложения
 
 ```bash
@@ -161,6 +181,13 @@ POST   /projects/many
 PATCH  /projects/{project_id}
 DELETE /projects/{project_id}
 ```
+
+External
+GET /external/posts
+
+Endpoint `/external/posts`использует async-сервис, который обращается к:
+
+https://jsonplaceholder.typicode.com/posts
 
 ## Примеры запросов
 
@@ -242,29 +269,105 @@ complete_time
 Запуск всех тестов:
 
 ```bash
-uv run pytest -q
+uv run pytest -v
 ```
 
 Текущий результат:
 
 ```text
-23 passed
+36 passed
 ```
 
-Тесты покрывают:
+## Запуск тестов по маркерам
 
-- User CRUD;
-- batch user routes;
-- Auth register/login/refresh;
-- dependency auth flow;
-- middleware auth flow;
-- validation errors;
-- Project CRUD;
-- Project pagination/filtering/sorting;
-- Project duplicate name;
-- Project foreign key error;
-- Project not found cases;
-- запрет лишних полей при update.
+Database / repository tests:
+
+```bash
+uv run pytest -q -m database
+```
+Текущий результат:
+
+7 passed
+
+Service layer tests:
+````bash
+uv run pytest -q -m services
+````
+Текущий результат:
+
+6 passed
+
+Controller / integration tests:
+````bash
+uv run pytest -q -m controllers
+````
+Текущий результат:
+
+23 passed
+
+## Что покрыто тестами:
+
+Database / repository tests:
+
+- `tests/test_project_repository.py
+  - создание и получение проекта;
+  - обновление проекта;
+  - удаление проекта.
+- `tests/test_user_repository.py`
+  - создание и получение пользователя;
+  -  обновление пользователя;
+  -  удаление пользователя;
+  -  получение пользователя по email;
+  -  получение auth-данных пользователя по email.
+
+Service tests:
+
+- `tests/test_project_service.py`
+  - получение проекта;
+  - получение списка проектов;
+  - создание проекта;
+  - обновление проекта;
+  - удаление проекта.
+
+- `tests/test_external_posts_service.py`
+  - async-запрос к внешнему posts API;
+  - mock httpx.AsyncClient;
+  - проверка URL;
+  - проверка raise_for_status;
+  - проверка возвращаемого JSON.
+
+Controller / integration tests:
+  
+- `tests/test_app.py`
+  
+  - User CRUD;
+  - batch user routes;
+  - Auth register/login/refresh;
+  - dependency auth flow;
+  - middleware auth flow;
+  - validation errors;
+  - Project CRUD; 
+  - Project pagination/filtering/sorting;
+  - Project duplicate name;
+  - Project foreign key error;
+  - Project not found cases;
+  - запрет лишних полей при update.
+
+## Тестовая база данных
+
+Тесты используют отдельную PostgreSQL-базу:
+
+store_test_db
+
+Перед первым запуском тестов нужно применить миграции к тестовой базе:
+
+TESTING=true uv run alembic upgrade head
+
+`tests/conftest.py` автоматически очищает таблицы перед и после каждого теста:
+
+TRUNCATE TABLE projects, users RESTART IDENTITY CASCADE;
+
+Это позволяет запускать тесты независимо друг от друга.
 
 ## Примечания по реализации
 
@@ -272,10 +375,19 @@ uv run pytest -q
 - FastAPI routes получают DB-сессию через `Depends(get_db)`.
 - Auth больше не использует старый in-memory connector.
 - Старый `auth/connector.py` удалён как неиспользуемый.
-- Тесты очищают PostgreSQL-таблицы `projects` и `users` перед/после тестов через `TRUNCATE ... RESTART IDENTITY CASCADE`.
+- Для тестов используется отдельная test DB через `TESTING=true`.
+- Внешний posts-сервис тестируется через mock, поэтому тесты не зависят от реального доступа к интернету.
+- Тесты разделены маркерами:
+  - database;
+  - services;
+  - controllers.
 
 ## Статус
 
 Проект переведён на PostgreSQL и SQLAlchemy ORM.
 
 Основные user, auth и project flows проверены через pytest.
+
+Текущий результат тестов:
+
+36 passed
